@@ -1,0 +1,16 @@
+nettail: tail a file on a networked computer
+
+pre-alpha
+
+Usage:
+
+nettail-server <filename>
+	start a server and when the client connects, send lines from the file
+	when it's modified
+
+nettail-client <ip>
+	connect to <ip>, receive and display lines from <filename>
+
+
+
+This file was last revised 2016-10-07
