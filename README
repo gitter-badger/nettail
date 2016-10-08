@@ -4,11 +4,11 @@ pre-alpha
 
 Usage:
 
-nettail-server <filename>
+nettail-server
 	start a server and when the client connects, send lines from the file
 	when it's modified
 
-nettail-client <ip>
+nettail-client <ip> <remote filename>
 	connect to <ip>, receive and display lines from <filename>
 
 

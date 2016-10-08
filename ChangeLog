@@ -1,0 +1,7 @@
+2016-10-07
+
+  * nettail-client: now takes the remote filename as an argument (see
+  README)
+
+  * nettail-server: <filename> argument removed; it's not passed by way of
+  nettail-client

@@ -33,6 +33,9 @@
 #include <string.h>
 #include <sys/types.h>
 #include <sys/inotify.h>
+#include <limits.h>
+
+#include "nettail.h"
 
 int
 main(int argc, char *argv[])
@@ -58,15 +61,7 @@ main(int argc, char *argv[])
     exit (EXIT_FAILURE);
   }
 
-  int wd = inotify_add_watch (inotify_fd, argv[1], IN_MODIFY);
 
-  if (wd == -1)
-  {
-    perror ("inotify:");
-    exit (EXIT_FAILURE);
-  }
-
-  ssize_t num_read;
 
   /* char str_port[10];
   int int_port = 0; */
@@ -87,17 +82,32 @@ main(int argc, char *argv[])
     return -1;
   }
 
-
-
-  char line[512];
-  FILE *fp = fopen (argv[1], "r");
-  fseek (fp, -512, SEEK_END);
-
-  /* fclose (fp); */
+  char recv_buf[PATH_MAX];
+  char filename_requested[PATH_MAX];
+  int wd;
 
   while(1)
     {
       connfd = accept(listenfd, (struct sockaddr*)NULL ,NULL); // accept awaiting request
+
+      read (connfd, filename_requested, sizeof (filename_requested));
+
+        printf ("%s filename\n", filename_requested);
+
+        wd = inotify_add_watch (inotify_fd, filename_requested, IN_MODIFY);
+
+        if (wd == -1)
+        {
+          perror ("inotify:");
+          exit (EXIT_FAILURE);
+        }
+
+
+      ssize_t num_read;
+
+      char line[512];
+      FILE *fp = fopen (filename_requested, "r");
+      fseek (fp, -512, SEEK_END);
 
       while (fgets (line, 512, fp) != NULL)
       {

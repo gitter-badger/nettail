@@ -33,6 +33,8 @@
 #include <unistd.h>
 #include <errno.h>
 #include <arpa/inet.h>
+#include <limits.h>
+#include "nettail.h"
 
 int
 main(int argc, char *argv[])
@@ -51,21 +53,37 @@ main(int argc, char *argv[])
   serv_addr.sin_family = AF_INET;
   serv_addr.sin_port = htons(5000);
 
-  char lan_ip[24];
+  /*
+   * FIXME: Needs better checking of command line arguments
+   */
+  if (argc < 3)
+  {
+    fprintf (stderr, "Usage: %s, <ip> <remote filename>\n", argv[0]);
+    return 1;
+  }
 
-  if (argc == 2)
-    strcpy (lan_ip, argv[1]);
-  else
-    strcpy (lan_ip, "127.0.0.1");
+  char lan_ip[24];
+  strcpy (lan_ip, argv[1]);
 
   printf ("%s\n", lan_ip);
   serv_addr.sin_addr.s_addr = inet_addr(lan_ip);
+
+  char remote_filename[PATH_MAX];
+
+  if (strlen (argv[2]) > 2)
+    strcpy (remote_filename, argv[2]);
+  else
+    fprintf (stderr, "Use a better filename\n");
 
   if(connect(sockfd, (struct sockaddr *)&serv_addr, sizeof(serv_addr))<0)
     {
       printf("\n Error : Connect Failed \n");
       return 1;
     }
+
+  if (write (sockfd, remote_filename, sizeof (remote_filename)) == -1)
+    perror ("write:");
+
 
   while((n = read(sockfd, recvBuff, sizeof(recvBuff)-1)) > 0)
     {
