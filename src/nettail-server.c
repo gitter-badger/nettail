@@ -34,8 +34,28 @@
 #include <sys/types.h>
 #include <sys/inotify.h>
 #include <limits.h>
+#include <pthread.h>
 
 #include "include/nettail.h"    /* Need a Makefile */
+
+struct thread_info {
+  int fd;
+  int death;
+};
+
+static void*
+die (void *arg)
+{
+  struct thread_info *ti = arg;
+
+  char cmd[80];
+  read (ti->fd, cmd, sizeof (cmd));
+  printf ("Death in function\n");
+  if (strcmp (cmd, "die") == 0)
+    ti->death = 1;
+
+  return;
+}
 
 int
 main (int argc, char *argv[])
@@ -76,6 +96,13 @@ main (int argc, char *argv[])
 
   connfd = accept (listenfd, (struct sockaddr *) NULL, NULL);   // accept awaiting request
 
+  pthread_t thread_id;
+  struct thread_info ti;
+  ti.death = 0;
+  ti.fd = connfd;
+
+  pthread_create(&thread_id, NULL, &die, &ti);
+
   read (connfd, filename_requested, sizeof (filename_requested));
 
   printf ("%s filename\n", filename_requested);
@@ -102,8 +129,12 @@ main (int argc, char *argv[])
 
   fseek (fp, 0, SEEK_END);
 
+  int debug_ctr = 0;
+
   for (;;)
   {
+    printf ("%d\n", debug_ctr++);
+
     num_read = read (inotify_fd, sendBuff, 1024);
 
     if (num_read > 0)
@@ -116,9 +147,12 @@ main (int argc, char *argv[])
 
       fseek (fp, 0, SEEK_END);
 
-      /* strcpy(sendBuff, "Message from server"); */
-      /* write(connfd, sendBuff, strlen(sendBuff)); */
-      /* write(connfd, host_name, strlen(host_name)); */
+      if (ti.death == 1)
+      {
+        fclose (fp);
+        printf ("Death received\n");
+        break;
+      }
     }
   }
 
