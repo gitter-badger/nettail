@@ -35,25 +35,24 @@
 #include <sys/inotify.h>
 #include <limits.h>
 
-#include "nettail.h"
+#include "include/nettail.h"    /* Need a Makefile */
 
 int
-main(int argc, char *argv[])
+main (int argc, char *argv[])
 {
-  int listenfd = 0,connfd = 0;
+  int listenfd = 0, connfd = 0;
 
   struct sockaddr_in serv_addr;
 
   char sendBuff[1025];
 
-
-  listenfd = socket(AF_INET, SOCK_STREAM, 0);
-  printf("socket retrieve success\n");
+  listenfd = socket (AF_INET, SOCK_STREAM, 0);
+  printf ("socket retrieve success\n");
 
   serv_addr.sin_family = AF_INET;
-  serv_addr.sin_addr.s_addr = htonl(INADDR_ANY);
+  serv_addr.sin_addr.s_addr = htonl (INADDR_ANY);
 
-  int inotify_fd = inotify_init();
+  int inotify_fd = inotify_init ();
 
   if (inotify_fd == -1)
   {
@@ -61,24 +60,13 @@ main(int argc, char *argv[])
     exit (EXIT_FAILURE);
   }
 
+  serv_addr.sin_port = htons (5000);
 
+  bind (listenfd, (struct sockaddr *) &serv_addr, sizeof (serv_addr));
 
-  /* char str_port[10];
-  int int_port = 0; */
-
-/*
-  if (argc == 2)
-    strcpy (str_port, argv[1]);
-  else
-    strcpy (str_port, "5000"); */
-
-  serv_addr.sin_port = htons(5000);
-
-  bind(listenfd, (struct sockaddr*)&serv_addr,sizeof(serv_addr));
-
-  if(listen(listenfd, 10) == -1)
+  if (listen (listenfd, 10) == -1)
   {
-    printf("Failed to listen\n");
+    printf ("Failed to listen\n");
     return -1;
   }
 
@@ -86,60 +74,56 @@ main(int argc, char *argv[])
   char filename_requested[PATH_MAX];
   int wd;
 
-  while(1)
+  connfd = accept (listenfd, (struct sockaddr *) NULL, NULL);   // accept awaiting request
+
+  read (connfd, filename_requested, sizeof (filename_requested));
+
+  printf ("%s filename\n", filename_requested);
+
+  wd = inotify_add_watch (inotify_fd, filename_requested, IN_MODIFY);
+
+  if (wd == -1)
+  {
+    perror ("inotify:");
+    exit (EXIT_FAILURE);
+  }
+
+  ssize_t num_read;
+
+  char line[LINE_BUF_SIZE];
+  FILE *fp = fopen (filename_requested, "r");
+  fseek (fp, -LINE_BUF_SIZE, SEEK_END);
+
+  while (fgets (line, LINE_BUF_SIZE, fp) != NULL)
+  {
+    line[strlen (line) - 1] = '\0';
+    write (connfd, line, strlen (line));
+  }
+
+  fseek (fp, 0, SEEK_END);
+
+  for (;;)
+  {
+    num_read = read (inotify_fd, sendBuff, 1024);
+
+    if (num_read > 0)
     {
-      connfd = accept(listenfd, (struct sockaddr*)NULL ,NULL); // accept awaiting request
-
-      read (connfd, filename_requested, sizeof (filename_requested));
-
-        printf ("%s filename\n", filename_requested);
-
-        wd = inotify_add_watch (inotify_fd, filename_requested, IN_MODIFY);
-
-        if (wd == -1)
-        {
-          perror ("inotify:");
-          exit (EXIT_FAILURE);
-        }
-
-
-      ssize_t num_read;
-
-      char line[512];
-      FILE *fp = fopen (filename_requested, "r");
-      fseek (fp, -512, SEEK_END);
-
-      while (fgets (line, 512, fp) != NULL)
+      while (fgets (sendBuff, sizeof (sendBuff), fp) != NULL)
       {
-        line [strlen(line) - 1] = '\0';
-        write(connfd, line, strlen(line));
+        sendBuff[strlen (sendBuff) - 1] = '\0';
+        write (connfd, sendBuff, LINE_BUF_SIZE);
       }
 
       fseek (fp, 0, SEEK_END);
 
-      for (;;)
-      {
-        num_read = read (inotify_fd, sendBuff, 1024);
-
-        if (num_read > 0)
-        {
-          while (fgets (sendBuff, 512, fp) != NULL)
-          {
-            sendBuff [strlen(sendBuff) - 1] = '\0';
-            write (connfd, sendBuff, 512);
-          }
-
-          fseek (fp, 0, SEEK_END);
-
-            /* strcpy(sendBuff, "Message from server"); */
-          /* write(connfd, sendBuff, strlen(sendBuff)); */
-          /* write(connfd, host_name, strlen(host_name)); */
-        }
-      }
-
-      close(connfd);
-      sleep(1);
+      /* strcpy(sendBuff, "Message from server"); */
+      /* write(connfd, sendBuff, strlen(sendBuff)); */
+      /* write(connfd, host_name, strlen(host_name)); */
     }
+  }
+
+  close (connfd);
+  sleep (1);
 
   return 0;
 }

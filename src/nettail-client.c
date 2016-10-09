@@ -34,24 +34,24 @@
 #include <errno.h>
 #include <arpa/inet.h>
 #include <limits.h>
-#include "nettail.h"
+#include "include/nettail.h"
 
 int
-main(int argc, char *argv[])
+main (int argc, char *argv[])
 {
-  int sockfd = 0,n = 0;
+  int sockfd = 0, n = 0;
   char recvBuff[1024];
   struct sockaddr_in serv_addr;
 
-  memset(recvBuff, '0' ,sizeof(recvBuff));
-  if((sockfd = socket(AF_INET, SOCK_STREAM, 0))< 0)
-    {
-      printf("\n Error : Could not create socket \n");
-      return 1;
-    }
+  memset (recvBuff, '0', sizeof (recvBuff));
+  if ((sockfd = socket (AF_INET, SOCK_STREAM, 0)) < 0)
+  {
+    printf ("\n Error : Could not create socket \n");
+    return 1;
+  }
 
   serv_addr.sin_family = AF_INET;
-  serv_addr.sin_port = htons(5000);
+  serv_addr.sin_port = htons (5000);
 
   /*
    * FIXME: Needs better checking of command line arguments
@@ -66,7 +66,7 @@ main(int argc, char *argv[])
   strcpy (lan_ip, argv[1]);
 
   printf ("%s\n", lan_ip);
-  serv_addr.sin_addr.s_addr = inet_addr(lan_ip);
+  serv_addr.sin_addr.s_addr = inet_addr (lan_ip);
 
   char remote_filename[PATH_MAX];
 
@@ -75,30 +75,31 @@ main(int argc, char *argv[])
   else
     fprintf (stderr, "Use a better filename\n");
 
-  if(connect(sockfd, (struct sockaddr *)&serv_addr, sizeof(serv_addr))<0)
-    {
-      printf("\n Error : Connect Failed \n");
-      return 1;
-    }
+  if (connect (sockfd, (struct sockaddr *) &serv_addr, sizeof (serv_addr)) <
+      0)
+  {
+    printf ("\n Error : Connect Failed \n");
+    return 1;
+  }
 
   if (write (sockfd, remote_filename, sizeof (remote_filename)) == -1)
     perror ("write:");
 
 
-  while((n = read(sockfd, recvBuff, sizeof(recvBuff)-1)) > 0)
+  while ((n = read (sockfd, recvBuff, sizeof (recvBuff) - 1)) > 0)
+  {
+    recvBuff[n] = 0;
+    if (fputs (recvBuff, stdout) == EOF)
     {
-      recvBuff[n] = 0;
-      if(fputs(recvBuff, stdout) == EOF)
-    {
-      printf("\n Error : Fputs error");
+      printf ("\n Error : Fputs error");
     }
-      printf("\n");
-    }
+    printf ("\n");
+  }
 
-  if( n < 0)
-    {
-      printf("\n Read Error \n");
-    }
+  if (n < 0)
+  {
+    printf ("\n Read Error \n");
+  }
 
   return 0;
 }

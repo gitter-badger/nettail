@@ -28,4 +28,6 @@
 #define PATH_MAX 256
 #endif
 
+#define LINE_BUF_SIZE 512
+
 #endif
