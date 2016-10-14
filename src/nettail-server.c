@@ -38,33 +38,34 @@
 
 #include "include/nettail.h"    /* Need a Makefile */
 
-struct thread_info {
+struct thread_info
+{
   int fd;
   int death;
 };
 
-static void*
-die (void *arg)
+/* arguments passed to pthread_create() */
+struct tail
 {
-  struct thread_info *ti = arg;
+  int inotify_fd;
+  int connfd;
 
-  char cmd[80];
-  read (ti->fd, cmd, sizeof (cmd));
-  printf ("Death in function\n");
-  if (strcmp (cmd, "die") == 0)
-    ti->death = 1;
+};
 
-  return;
-}
+static void*
+die (void *arg);
+
+/* tail_file: intended to run after a connection is accepted
+ */
+static void*
+tail_file (void *arg);
 
 int
 main (int argc, char *argv[])
 {
-  int listenfd = 0, connfd = 0;
+  int listenfd = 0;
 
   struct sockaddr_in serv_addr;
-
-  char sendBuff[1025];
 
   listenfd = socket (AF_INET, SOCK_STREAM, 0);
   printf ("socket retrieve success\n");
@@ -72,6 +73,8 @@ main (int argc, char *argv[])
   serv_addr.sin_family = AF_INET;
   serv_addr.sin_addr.s_addr = htonl (INADDR_ANY);
 
+  /* initialize inotify, which is used to let us know a file has been
+   * modified */
   int inotify_fd = inotify_init ();
 
   if (inotify_fd == -1)
@@ -91,17 +94,70 @@ main (int argc, char *argv[])
   }
 
   char recv_buf[PATH_MAX];
+
+  pthread_t thread_id[THREAD_MAX];
+
+  int connfd[THREAD_MAX];
+
+  int thread_ctr = 0;
+
+  /* WIP */
+  while (1)
+  {
+    /* accept awaiting request */
+    connfd[thread_ctr] = accept (listenfd, (struct sockaddr *) NULL, NULL);
+    if (connfd[thread_ctr] < 0)
+    {
+      perror ("accept");
+      exit (EXIT_ACCEPT_FAILURE);
+    }
+
+    struct tail tail_reqs;
+
+    tail_reqs.inotify_fd = inotify_fd;
+    tail_reqs.connfd = connfd[thread_ctr];
+
+    int state;
+
+    /* start a new thread, run tail_file() */
+    state = pthread_create (&thread_id[thread_ctr], NULL, tail_file, &tail_reqs);
+    if (state != 0)
+    {
+      fprintf (stderr, "Error: pthread_create");
+      exit (EXIT_PTHREAD_CREATE_FAILURE);
+    }
+
+    thread_ctr++;
+  }
+  return 0;
+}
+
+/* WIP */
+static void*
+die (void *arg)
+{
+  struct thread_info *ti = arg;
+
+  char cmd[80];
+  read (ti->fd, cmd, sizeof (cmd));
+  printf ("Death in function\n");
+  if (strcmp (cmd, "die") == 0)
+    ti->death = 1;
+
+  return (void*)NULL;
+}
+
+static void*
+tail_file (void *arg)
+{
+  struct tail *tail_reqs = arg;
+
   char filename_requested[PATH_MAX];
+
   int wd;
 
-  connfd = accept (listenfd, (struct sockaddr *) NULL, NULL);   // accept awaiting request
-
-  pthread_t thread_id;
-  struct thread_info ti;
-  ti.death = 0;
-  ti.fd = connfd;
-
-  pthread_create(&thread_id, NULL, &die, &ti);
+  int inotify_fd = tail_reqs->inotify_fd;
+  int connfd = tail_reqs->connfd;
 
   read (connfd, filename_requested, sizeof (filename_requested));
 
@@ -131,6 +187,8 @@ main (int argc, char *argv[])
 
   int debug_ctr = 0;
 
+  char sendBuff[1025];
+
   for (;;)
   {
     printf ("%d\n", debug_ctr++);
@@ -146,18 +204,11 @@ main (int argc, char *argv[])
       }
 
       fseek (fp, 0, SEEK_END);
-
-      if (ti.death == 1)
-      {
-        fclose (fp);
-        printf ("Death received\n");
-        break;
-      }
     }
   }
 
   close (connfd);
   sleep (1);
 
-  return 0;
+  return (void*)NULL;
 }

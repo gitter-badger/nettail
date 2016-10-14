@@ -1,6 +1,8 @@
 nettail: tail a file on a networked computer
 
-pre-alpha
+pre-alpha/WIP
+
+I'm using this project to help me learn pthreads and network sockets.
 
 Usage:
 
@@ -12,5 +14,4 @@ nettail-client <ip> <remote filename>
 	connect to <ip>, receive and display lines from <filename>
 
 
-
-This file was last revised 2016-10-07
+This file was last revised 2016-10-14
