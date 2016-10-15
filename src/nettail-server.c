@@ -112,6 +112,7 @@ main (int argc, char *argv[])
 
   pthread_t thread_id[THREAD_MAX];
 
+  /* FIXME: THREAD_MAX not yet enforced */
   int connfd[THREAD_MAX];
 
   int thread_ctr = 0;
@@ -197,17 +198,16 @@ tail_file (void *arg)
   state = fseek (fp, -LINE_BUF_SIZE, SEEK_END);
   if (state == -1)
   {
-    perror ("fseek:");
+    perror ("fseek");
     exit (EXIT_FSEEK_FAILURE);
   }
 
   while (fgets (line, LINE_BUF_SIZE, fp) != NULL)
   {
-    line[strlen (line) - 1] = '\0';
     state = write (connfd, line, strlen (line));
     if (state == -1)
     {
-      perror ("write:");
+      perror ("write");
       exit (EXIT_WRITE_FD_FAILURE);
     }
   }
@@ -221,19 +221,17 @@ tail_file (void *arg)
 
   int debug_ctr = 0;
 
-  char sendBuff[1025];
+  char sendBuff[LINE_BUF_SIZE];
 
   for (;;)
   {
-    printf ("%d\n", debug_ctr++);
+    printf ("%d - connfd: %d\n", debug_ctr++, connfd);
 
     num_read = read (inotify_fd, sendBuff, 1024);
     if (num_read > 0)
     {
       while (fgets (sendBuff, sizeof (sendBuff), fp) != NULL)
       {
-        sendBuff[strlen (sendBuff) - 1] = '\0';
-
         state = write (connfd, sendBuff, LINE_BUF_SIZE);
         if (state == -1)
         {

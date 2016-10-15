@@ -51,7 +51,7 @@ int
 main (int argc, char *argv[])
 {
   int sockfd = 0, n = 0;
-  char recvBuff[1024];
+  char recvBuff[LINE_BUF_SIZE];
   struct sockaddr_in serv_addr;
 
   memset (recvBuff, '0', sizeof (recvBuff));
@@ -106,20 +106,19 @@ main (int argc, char *argv[])
 
   sigaction (SIGTERM, &act, NULL);
 
-  while ((n = read (sockfd, recvBuff, sizeof (recvBuff) - 1)) > 0)
+  do
   {
-    recvBuff[n] = 0;
+    n = read (sockfd, recvBuff, sizeof (recvBuff));
 
-    if (fputs (recvBuff, stdout) == EOF)
-    {
-      printf ("\n Error : Fputs error");
-    }
-    printf ("\n");
-  }
+    /* Adding NULL terminator required */
+    recvBuff[n] = '\0';
 
-  if (n < 0)
+    fprintf (stdout, "%s", recvBuff);
+  } while (n > 0);
+
+  if (n == -1)
   {
-    printf ("\n Read Error \n");
+    perror ("read");
   }
 
   if (kill_sent)
