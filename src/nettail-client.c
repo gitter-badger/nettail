@@ -43,7 +43,7 @@ bool kill_sent;
 static void
 hdl (int sig, siginfo_t *siginfo, void *context)
 {
-  printf ("SIGTERM received");
+  printf ("SIGINT received");
   kill_sent = 1;
 }
 
@@ -94,7 +94,7 @@ main (int argc, char *argv[])
   }
 
   if (write (sockfd, remote_filename, sizeof (remote_filename)) == -1)
-    perror ("write:");
+    perror ("write");
 
   struct sigaction act;
 
@@ -104,7 +104,7 @@ main (int argc, char *argv[])
 
   act.sa_flags = SA_SIGINFO;
 
-  sigaction (SIGTERM, &act, NULL);
+  sigaction (SIGINT, &act, NULL);
 
   do
   {
@@ -124,12 +124,12 @@ main (int argc, char *argv[])
   if (kill_sent)
   {
     write (sockfd, "die", 4);
-    printf ("Received SIGTERM\n");
+    printf ("Received SIGINT\n");
 
   }
 
-  while (1)
-    sleep (10);
+  //while (1)
+   // sleep (10);
 
   return 0;
 }

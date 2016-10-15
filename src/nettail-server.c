@@ -47,9 +47,10 @@ struct thread_info
 /* arguments passed to pthread_create() */
 struct tail
 {
-  int inotify_fd;
-  int connfd;
-
+  int *inotify_fd;
+  int *connfd;
+  bool *threads_free;
+  int tid;
 };
 
 static void*
@@ -70,7 +71,7 @@ main (int argc, char *argv[])
   listenfd = socket (AF_INET, SOCK_STREAM, 0);
   if (listenfd == -1)
   {
-    perror ("socket:");
+    perror ("socket");
     exit (EXIT_SOCKET_FAILURE);
   }
 
@@ -87,7 +88,7 @@ main (int argc, char *argv[])
   int inotify_fd = inotify_init ();
   if (inotify_fd == -1)
   {
-    perror ("inotify:");
+    perror ("inotify");
     exit (EXIT_IN_FAILURE);
   }
 
@@ -98,7 +99,7 @@ main (int argc, char *argv[])
   state = bind (listenfd, (struct sockaddr *) &serv_addr, sizeof (serv_addr));
   if (state == -1)
   {
-    perror ("bind:");
+    perror ("bind");
     exit (EXIT_BIND_FAILURE);
   }
 
@@ -108,21 +109,36 @@ main (int argc, char *argv[])
     return -1;
   }
 
-  char recv_buf[PATH_MAX];
-
   pthread_t thread_id[THREAD_MAX];
 
   /* FIXME: THREAD_MAX not yet enforced */
   int connfd[THREAD_MAX];
+  bool threads_free [THREAD_MAX];
 
-  int thread_ctr = 0;
+  int i;
+  for (i = 0; i < THREAD_MAX;i++)
+    threads_free[i] = 0;
 
-  /* WIP */
   while (1)
   {
+    int tid;
+    for (i = 0; i < THREAD_MAX;i++)
+    {
+      if (threads_free[i] == 0)
+      {
+        threads_free[i] = 1;
+        tid = i;
+        printf ("tid %d/%d is now reserved for the next connection\n",
+                tid, THREAD_MAX);
+        break;
+      }
+      else if (i == THREAD_MAX - 1 && threads_free[i] == 1)
+        printf ("No free threads! Max is %d\n", THREAD_MAX);
+    }
+
     /* accept awaiting request */
-    connfd[thread_ctr] = accept (listenfd, (struct sockaddr *) NULL, NULL);
-    if (connfd[thread_ctr] < 0)
+    connfd[tid] = accept (listenfd, (struct sockaddr *) NULL, NULL);
+    if (connfd[tid] < 0)
     {
       perror ("accept");
       exit (EXIT_ACCEPT_FAILURE);
@@ -130,18 +146,22 @@ main (int argc, char *argv[])
 
     struct tail tail_reqs;
 
-    tail_reqs.inotify_fd = inotify_fd;
-    tail_reqs.connfd = connfd[thread_ctr];
+    tail_reqs.inotify_fd = &inotify_fd;
+    tail_reqs.connfd = &connfd[tid];
+    tail_reqs.threads_free = threads_free;
+    tail_reqs.tid = tid;
 
     /* start a new thread, run tail_file() */
-    state = pthread_create (&thread_id[thread_ctr], NULL, tail_file, &tail_reqs);
+    state = pthread_create (&thread_id[tid], NULL, tail_file, &tail_reqs);
     if (state != 0)
     {
       fprintf (stderr, "Error: pthread_create");
       exit (EXIT_PTHREAD_CREATE_FAILURE);
     }
 
-    thread_ctr++;
+    state = pthread_detach (thread_id[tid]);
+    if (state != 0)
+      fprintf (stderr, "Error: pthread_detach");
   }
   return 0;
 }
@@ -164,21 +184,27 @@ die (void *arg)
 static void*
 tail_file (void *arg)
 {
+  struct die_args
+  {
+    int *connfd;
+    FILE *fp;
+  }
+
   struct tail *tail_reqs = arg;
 
   char filename_requested[PATH_MAX];
 
-  int inotify_fd = tail_reqs->inotify_fd;
-  int connfd = tail_reqs->connfd;
+  int *inotify_fd = tail_reqs->inotify_fd;
+  int *connfd = tail_reqs->connfd;
 
-  read (connfd, filename_requested, sizeof (filename_requested));
+  read (*connfd, filename_requested, sizeof (filename_requested));
 
   printf ("%s filename\n", filename_requested);
 
-  int wd = inotify_add_watch (inotify_fd, filename_requested, IN_MODIFY);
+  int wd = inotify_add_watch (*inotify_fd, filename_requested, IN_MODIFY);
   if (wd == -1)
   {
-    perror ("inotify_add_watch:");
+    perror ("inotify_add_watch");
     exit (EXIT_IN_FAILURE);
   }
 
@@ -189,7 +215,7 @@ tail_file (void *arg)
   FILE *fp = fopen (filename_requested, "r");
   if (fp == NULL)
   {
-    perror ("fopen:");
+    perror ("fopen");
     exit (EXIT_OPEN_FD_FAILURE);
   }
 
@@ -204,7 +230,7 @@ tail_file (void *arg)
 
   while (fgets (line, LINE_BUF_SIZE, fp) != NULL)
   {
-    state = write (connfd, line, strlen (line));
+    state = write (*connfd, line, strlen (line));
     if (state == -1)
     {
       perror ("write");
@@ -215,27 +241,27 @@ tail_file (void *arg)
   state = fseek (fp, 0, SEEK_END);
   if (state == -1)
   {
-    perror ("fseek:");
+    perror ("fseek");
     exit (EXIT_FSEEK_FAILURE);
   }
 
   int debug_ctr = 0;
-
+  char recv_buf[LINE_BUF_SIZE];
   char sendBuff[LINE_BUF_SIZE];
 
   for (;;)
   {
-    printf ("%d - connfd: %d\n", debug_ctr++, connfd);
+    printf ("%d - connfd: %d\n", debug_ctr++, *connfd);
 
-    num_read = read (inotify_fd, sendBuff, 1024);
+    num_read = read (*inotify_fd, sendBuff, LINE_BUF_SIZE);
     if (num_read > 0)
     {
       while (fgets (sendBuff, sizeof (sendBuff), fp) != NULL)
       {
-        state = write (connfd, sendBuff, LINE_BUF_SIZE);
+        state = write (*connfd, sendBuff, LINE_BUF_SIZE);
         if (state == -1)
         {
-          perror ("write:");
+          perror ("write");
           exit (EXIT_WRITE_FD_FAILURE);
         }
       }
@@ -243,18 +269,29 @@ tail_file (void *arg)
       state = fseek (fp, 0, SEEK_END);
       if (state == -1)
       {
-        perror ("fseek:");
+        perror ("fseek");
         exit (EXIT_FSEEK_FAILURE);
       }
+
+      /* ssize_t cmd_read = read (*connfd, recv_buf, sizeof (recv_buf));
+      if (cmd_read > 0)
+      {
+        recv_buf[cmd_read] = '\0';
+        printf ("cmd = %s\n", recv_buf);
+
+        if (strcmp (recv_buf, "die") == 0)
+          break;
+      } */
+
     }
     else if (num_read == -1)
     {
-      perror ("read:");
+      perror ("read");
       exit (EXIT_READ_FD_FAILURE);
     }
   }
 
-  state = close (connfd);
+  state = close (*connfd);
   if (state == -1)
   {
     perror ("close:");
@@ -269,6 +306,9 @@ tail_file (void *arg)
   }
 
   sleep (1);
+
+  tail_reqs->threads_free[tail_reqs->tid] = 0;
+  printf ("tid %d is free\n", tail_reqs->tid);
 
   return (void*)NULL;
 }

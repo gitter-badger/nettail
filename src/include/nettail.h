@@ -21,6 +21,8 @@
  *
  */
 
+#include <stdbool.h>
+
 #ifndef NETAIL_INC_H
 #define NETAIL_INC_H
 
@@ -30,7 +32,7 @@
 
 #define LINE_BUF_SIZE 512
 
-#define THREAD_MAX 10
+#define THREAD_MAX 4
 
 #define EXIT_PTHREAD_CREATE_FAILURE 2
 #define EXIT_ACCEPT_FAILURE 3
