@@ -68,24 +68,39 @@ main (int argc, char *argv[])
   struct sockaddr_in serv_addr;
 
   listenfd = socket (AF_INET, SOCK_STREAM, 0);
+  if (listenfd == -1)
+  {
+    perror ("socket:");
+    exit (EXIT_SOCKET_FAILURE);
+  }
+
   printf ("socket retrieve success\n");
 
   serv_addr.sin_family = AF_INET;
   serv_addr.sin_addr.s_addr = htonl (INADDR_ANY);
 
   /* initialize inotify, which is used to let us know a file has been
-   * modified */
+   * modified
+   * FIXME: portability issue, consider using GAMIN, or adding support
+   * for both
+   */
   int inotify_fd = inotify_init ();
-
   if (inotify_fd == -1)
   {
     perror ("inotify:");
-    exit (EXIT_FAILURE);
+    exit (EXIT_IN_FAILURE);
   }
 
   serv_addr.sin_port = htons (5000);
 
-  bind (listenfd, (struct sockaddr *) &serv_addr, sizeof (serv_addr));
+  int state;
+
+  state = bind (listenfd, (struct sockaddr *) &serv_addr, sizeof (serv_addr));
+  if (state == -1)
+  {
+    perror ("bind:");
+    exit (EXIT_BIND_FAILURE);
+  }
 
   if (listen (listenfd, 10) == -1)
   {
@@ -116,8 +131,6 @@ main (int argc, char *argv[])
 
     tail_reqs.inotify_fd = inotify_fd;
     tail_reqs.connfd = connfd[thread_ctr];
-
-    int state;
 
     /* start a new thread, run tail_file() */
     state = pthread_create (&thread_id[thread_ctr], NULL, tail_file, &tail_reqs);
@@ -154,8 +167,6 @@ tail_file (void *arg)
 
   char filename_requested[PATH_MAX];
 
-  int wd;
-
   int inotify_fd = tail_reqs->inotify_fd;
   int connfd = tail_reqs->connfd;
 
@@ -163,27 +174,50 @@ tail_file (void *arg)
 
   printf ("%s filename\n", filename_requested);
 
-  wd = inotify_add_watch (inotify_fd, filename_requested, IN_MODIFY);
-
+  int wd = inotify_add_watch (inotify_fd, filename_requested, IN_MODIFY);
   if (wd == -1)
   {
-    perror ("inotify:");
-    exit (EXIT_FAILURE);
+    perror ("inotify_add_watch:");
+    exit (EXIT_IN_FAILURE);
   }
 
   ssize_t num_read;
 
   char line[LINE_BUF_SIZE];
+
   FILE *fp = fopen (filename_requested, "r");
-  fseek (fp, -LINE_BUF_SIZE, SEEK_END);
+  if (fp == NULL)
+  {
+    perror ("fopen:");
+    exit (EXIT_OPEN_FD_FAILURE);
+  }
+
+  int state;
+
+  state = fseek (fp, -LINE_BUF_SIZE, SEEK_END);
+  if (state == -1)
+  {
+    perror ("fseek:");
+    exit (EXIT_FSEEK_FAILURE);
+  }
 
   while (fgets (line, LINE_BUF_SIZE, fp) != NULL)
   {
     line[strlen (line) - 1] = '\0';
-    write (connfd, line, strlen (line));
+    state = write (connfd, line, strlen (line));
+    if (state == -1)
+    {
+      perror ("write:");
+      exit (EXIT_WRITE_FD_FAILURE);
+    }
   }
 
-  fseek (fp, 0, SEEK_END);
+  state = fseek (fp, 0, SEEK_END);
+  if (state == -1)
+  {
+    perror ("fseek:");
+    exit (EXIT_FSEEK_FAILURE);
+  }
 
   int debug_ctr = 0;
 
@@ -194,20 +228,48 @@ tail_file (void *arg)
     printf ("%d\n", debug_ctr++);
 
     num_read = read (inotify_fd, sendBuff, 1024);
-
     if (num_read > 0)
     {
       while (fgets (sendBuff, sizeof (sendBuff), fp) != NULL)
       {
         sendBuff[strlen (sendBuff) - 1] = '\0';
-        write (connfd, sendBuff, LINE_BUF_SIZE);
+
+        state = write (connfd, sendBuff, LINE_BUF_SIZE);
+        if (state == -1)
+        {
+          perror ("write:");
+          exit (EXIT_WRITE_FD_FAILURE);
+        }
       }
 
-      fseek (fp, 0, SEEK_END);
+      state = fseek (fp, 0, SEEK_END);
+      if (state == -1)
+      {
+        perror ("fseek:");
+        exit (EXIT_FSEEK_FAILURE);
+      }
+    }
+    else if (num_read == -1)
+    {
+      perror ("read:");
+      exit (EXIT_READ_FD_FAILURE);
     }
   }
 
-  close (connfd);
+  state = close (connfd);
+  if (state == -1)
+  {
+    perror ("close:");
+    exit (EXIT_CLOSE_FD_FAILURE);
+  }
+
+  state = fclose (fp);
+  if (state == EOF)
+  {
+    perror ("fclose:");
+    exit (EXIT_CLOSE_FD_FAILURE);
+  }
+
   sleep (1);
 
   return (void*)NULL;
