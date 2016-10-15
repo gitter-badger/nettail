@@ -53,6 +53,16 @@ struct tail
   int tid;
 };
 
+/* arguments passed to pthread_create when die() is run */
+struct die_args
+{
+  int *connfd;
+  FILE *fp;
+  bool *threads_free;
+  int *tid;
+  pthread_t thread_id;
+};
+
 static void*
 die (void *arg);
 
@@ -170,26 +180,57 @@ main (int argc, char *argv[])
 static void*
 die (void *arg)
 {
-  struct thread_info *ti = arg;
+  struct die_args *args = arg;
 
-  char cmd[80];
-  read (ti->fd, cmd, sizeof (cmd));
-  printf ("Death in function\n");
-  if (strcmp (cmd, "die") == 0)
-    ti->death = 1;
+  int *connfd = args->connfd;
+  FILE *fp = args->fp;
 
+  int state;
+  char recv_buf[LINE_BUF_SIZE];
+
+  ssize_t cmd_read;
+
+  recv_buf[0] = '\0';
+
+  while (strcmp (recv_buf, "die") != 0)
+  {
+    /* FIXME: need error checking */
+    cmd_read = read (*connfd, recv_buf, sizeof (recv_buf));
+    recv_buf[cmd_read] = '\0';
+    printf ("cmd = %s\n", recv_buf);
+
+    if (strcmp (recv_buf, "die") == 0)
+    {
+      state = close (*connfd);
+      if (state == -1)
+      {
+        perror ("close:");
+        exit (EXIT_CLOSE_FD_FAILURE);
+      }
+
+      state = fclose (fp);
+      if (state == EOF)
+      {
+        perror ("fclose:");
+        exit (EXIT_CLOSE_FD_FAILURE);
+      }
+
+      args->threads_free[*args->tid] = 0;
+      printf ("tid %d is free\n", *args->tid);
+
+      pthread_cancel (args->thread_id);
+      return (void*)NULL;
+    }
+  }
+
+  printf ("End of function reached\n");
   return (void*)NULL;
+
 }
 
 static void*
 tail_file (void *arg)
 {
-  struct die_args
-  {
-    int *connfd;
-    FILE *fp;
-  }
-
   struct tail *tail_reqs = arg;
 
   char filename_requested[PATH_MAX];
@@ -249,10 +290,22 @@ tail_file (void *arg)
   char recv_buf[LINE_BUF_SIZE];
   char sendBuff[LINE_BUF_SIZE];
 
+  struct die_args args;
+
+  args.connfd = connfd;
+  args.fp = fp;
+  args.threads_free = tail_reqs->threads_free;
+  args.tid = &tail_reqs->tid;
+  args.thread_id = pthread_self();
+
+  pthread_t thread_id;
+
+  pthread_create (&thread_id, NULL, die, &args);
+  pthread_detach (thread_id);
+
   for (;;)
   {
     printf ("%d - connfd: %d\n", debug_ctr++, *connfd);
-
     num_read = read (*inotify_fd, sendBuff, LINE_BUF_SIZE);
     if (num_read > 0)
     {
@@ -272,17 +325,6 @@ tail_file (void *arg)
         perror ("fseek");
         exit (EXIT_FSEEK_FAILURE);
       }
-
-      /* ssize_t cmd_read = read (*connfd, recv_buf, sizeof (recv_buf));
-      if (cmd_read > 0)
-      {
-        recv_buf[cmd_read] = '\0';
-        printf ("cmd = %s\n", recv_buf);
-
-        if (strcmp (recv_buf, "die") == 0)
-          break;
-      } */
-
     }
     else if (num_read == -1)
     {
@@ -291,24 +333,9 @@ tail_file (void *arg)
     }
   }
 
-  state = close (*connfd);
-  if (state == -1)
-  {
-    perror ("close:");
-    exit (EXIT_CLOSE_FD_FAILURE);
-  }
-
-  state = fclose (fp);
-  if (state == EOF)
-  {
-    perror ("fclose:");
-    exit (EXIT_CLOSE_FD_FAILURE);
-  }
-
   sleep (1);
 
-  tail_reqs->threads_free[tail_reqs->tid] = 0;
-  printf ("tid %d is free\n", tail_reqs->tid);
+
 
   return (void*)NULL;
 }
