@@ -21,10 +21,23 @@
  *
  */
 
-#include <stdbool.h>
+#ifndef INC_NETTAIL_H
+#define INC_NETTAIL_H
 
-#ifndef NETAIL_INC_H
-#define NETAIL_INC_H
+#include <stdbool.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <errno.h>
+#include <string.h>
+#include <sys/types.h>
+#include <sys/inotify.h>
+#include <limits.h>
+#include <signal.h>
+#include <pthread.h>
 
 #ifndef PATH_MAX
 #define PATH_MAX 256
@@ -44,5 +57,31 @@
 #define EXIT_FSEEK_FAILURE 9
 #define EXIT_SOCKET_FAILURE 10
 #define EXIT_BIND_FAILURE 11
+
+struct thread_info
+{
+  int fd;
+  int death;
+};
+
+/* arguments passed to pthread_create() */
+struct tail
+{
+  int *inotify_fd;
+  int *connfd;
+  bool *threads_free;
+  int tid;
+};
+
+/* arguments passed to pthread_create when die() is run */
+struct die_args
+{
+  int *connfd;
+  FILE *fp;
+  bool *threads_free;
+  int *tid;
+  pthread_t thread_id;
+};
+
 
 #endif
