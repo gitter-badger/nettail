@@ -54,7 +54,7 @@ die (void *arg)
       state = close (*connfd);
       if (state == -1)
       {
-        perror ("close:");
+        perror ("close: connfd : die");
         exit (EXIT_CLOSE_FD_FAILURE);
       }
 
@@ -65,10 +65,19 @@ die (void *arg)
         exit (EXIT_CLOSE_FD_FAILURE);
       }
 
+      if (pthread_mutex_lock (&mtx_array) != 0)
+        fprintf (stderr, "pthread_mutex_lock : error : die\n");
+
       args->threads_free[*args->tid] = 0;
+
+      if (pthread_mutex_unlock (&mtx_array) != 0)
+        fprintf (stderr, "pthread_mutex_unlock : error : die\n");
+
       printf ("tid %d is free\n", *args->tid);
 
-      pthread_cancel (args->thread_id);
+      if (pthread_cancel (args->thread_id) != 0)
+        fprintf (stderr, "pthread_cancel: error");
+
       return (void*)NULL;
     }
   }
@@ -184,8 +193,6 @@ tail_file (void *arg)
   }
 
   sleep (1);
-
-
 
   return (void*)NULL;
 }

@@ -45,7 +45,7 @@
 
 #define LINE_BUF_SIZE 512
 
-#define THREAD_MAX 4
+#define THREAD_MAX 10
 
 #define EXIT_PTHREAD_CREATE_FAILURE 2
 #define EXIT_ACCEPT_FAILURE 3
@@ -83,5 +83,6 @@ struct die_args
   pthread_t thread_id;
 };
 
+pthread_mutex_t mtx_array;
 
 #endif

@@ -86,6 +86,8 @@ main (int argc, char *argv[])
   while (1)
   {
     int tid;
+    if (pthread_mutex_lock (&mtx_array) != 0)
+      fprintf (stderr, "pthread_mutex_lock : error : main\n");
     for (i = 0; i < THREAD_MAX;i++)
     {
       if (threads_free[i] == 0)
@@ -99,6 +101,8 @@ main (int argc, char *argv[])
       else if (i == THREAD_MAX - 1 && threads_free[i] == 1)
         printf ("No free threads! Max is %d\n", THREAD_MAX);
     }
+    if (pthread_mutex_unlock (&mtx_array) != 0)
+      fprintf (stderr, "pthread_mutex_unlock : error : main\n");
 
     /* accept awaiting request */
     connfd[tid] = accept (listenfd, (struct sockaddr *) NULL, NULL);
