@@ -56,7 +56,18 @@ main (int argc, char *argv[])
     exit (EXIT_IN_FAILURE);
   }
 
-  serv_addr.sin_port = htons (5000);
+  if (argc != 2)
+  {
+    fprintf (stderr, "Usage: %s <port>\n", argv[0]);
+    exit (EXIT_FAILURE);
+  }
+
+  /* FIXME: check the number */
+
+  ushort arg_port = 0;
+  arg_port =  atoi (argv[1]);
+
+  serv_addr.sin_port = htons (arg_port);
 
   int state;
 
@@ -82,6 +93,8 @@ main (int argc, char *argv[])
   int i;
   for (i = 0; i < THREAD_MAX;i++)
     threads_free[i] = 0;
+
+  struct tail tail_args[THREAD_MAX];
 
   while (1)
   {
@@ -112,15 +125,14 @@ main (int argc, char *argv[])
       exit (EXIT_ACCEPT_FAILURE);
     }
 
-    struct tail tail_reqs;
-
-    tail_reqs.inotify_fd = &inotify_fd;
-    tail_reqs.connfd = &connfd[tid];
-    tail_reqs.threads_free = threads_free;
-    tail_reqs.tid = tid;
+    printf ("tid = %d\n", tid);
+    tail_args[tid].inotify_fd = &inotify_fd;
+    tail_args[tid].connfd = &connfd[tid];
+    tail_args[tid].threads_free = threads_free;
+    tail_args[tid].tid = tid;
 
     /* start a new thread, run tail_file() */
-    state = pthread_create (&thread_id[tid], NULL, tail_file, &tail_reqs);
+    state = pthread_create (&thread_id[tid], NULL, tail_file, &tail_args[tid]);
     if (state != 0)
     {
       fprintf (stderr, "Error: pthread_create");
